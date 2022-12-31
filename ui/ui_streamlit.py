@@ -101,10 +101,10 @@ with sidebar:
         scrapData = st.form_submit_button('Get data')
         if scrapData:
             # initialize data scraping
-#             try:
-#                 run_script(matchDate, firstTeam, secondTeam)
-#             except:
-#                 st.error('No data could be found')
+            # try:
+            #     run_script(matchDate, firstTeam, secondTeam)
+            # except:
+            #     st.error('No data could be found')
 
             st.session_state['scrapedData'] = json.load(
                 open(matchDirectory + '/scrapped_data.json')
@@ -432,7 +432,7 @@ with firstRow[1]:
 
         currentFrame = get_frame(secondsOfVideoPlayed)
         frameHeight = videoHeight + 300
-        frameWidth = videoHeight * (currentFrame.width / currentFrame.height) if currentFrame else 1.5
+        frameWidth = frameHeight * (currentFrame.width / currentFrame.height) if currentFrame else 1.5
         scaleWidth = frameWidth / currentFrame.width
         scaleHeight = frameHeight / currentFrame.height
         teamsColors = {
