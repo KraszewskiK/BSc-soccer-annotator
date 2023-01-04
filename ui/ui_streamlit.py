@@ -5,13 +5,14 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder
 import pandas as pd
 from streamlit_drawable_canvas import st_canvas
-from PIL import Image
+from PIL import Image, ImageDraw
 from streamlit_player import st_player
 from youtube_dl import YoutubeDL
 import cv2
 from base64 import b64encode
 import json
 from tempfile import NamedTemporaryFile
+
 # from execute_scrapper import run_script
 
 # streamlit configs
@@ -92,12 +93,15 @@ with sidebar:
 
     with st.form(key='scraper_form'):
         st.write('Getting data about the match')
-        matchDate = st.date_input('Choose the date of the match', value=datetime.date(2019, 8, 17))
+        matchDate = st.date_input(
+            'Choose the date of the match',
+            value=datetime.date(2019, 8, 17)
+        )
         sidebarColumns = st.columns(2)
         with sidebarColumns[0]:
-            firstTeam = st.text_input('The first team', value='Celta Vigo')
+            firstTeam = st.text_input('The first team', value='Team1')
         with sidebarColumns[1]:
-            secondTeam = st.text_input('The second team', value='Real Madrid')
+            secondTeam = st.text_input('The second team', value='Team2')
         scrapData = st.form_submit_button('Get data')
         if scrapData:
             # initialize data scraping
@@ -112,14 +116,15 @@ with sidebar:
 
     with st.form(key='automatic_annotation'):
         st.write('Getting automatic annotations')
-        annotationDirectories = os.listdir(matchDirectory + '/annotations/')
-        annotationDirectory = matchDirectory + '/annotations/' + st.selectbox(
-            'Select directory with annotations',
-            annotationDirectories
-        )
+        if videoSourceType == 'File':
+            annotationDirectories = os.listdir(matchDirectory + '/annotations/')
+            annotationDirectory = matchDirectory + '/annotations/' + st.selectbox(
+                'Select directory with annotations',
+                annotationDirectories
+            )
         annotate = st.form_submit_button('Get annotations')
-        if annotate:
-            # initialize automatic annotation
+        if annotate and videoSourceType == 'File':
+            # read annotations from files
             st.session_state[PLAYER_ANNOTATION] = json.load(
                 open(os.path.join(annotationDirectory, 'objects.json'))
             )
@@ -236,11 +241,11 @@ if 'scrapedData' in st.session_state:
 
 firstRow = st.columns([2.5, 5, 2.5])
 with firstRow[0]:
-    videoHeight = 350
-    videoPlayer = st_player(url=videoURL,
-                            events=['onProgress', 'onPause'],
-                            key='video',
-                            height=videoHeight)
+    videoPlayer = st_player(
+        url=videoURL,
+        events=['onProgress', 'onPause'],
+        key='video'
+    )
     videoMode = st.empty()
 
     secondsOfVideoPlayed = videoPlayer[1]['playedSeconds'] if videoPlayer[1] is not None else 0.0
@@ -431,8 +436,15 @@ with firstRow[1]:
         }
 
         currentFrame = get_frame(secondsOfVideoPlayed)
-        frameHeight = videoHeight + 300
-        frameWidth = frameHeight * (currentFrame.width / currentFrame.height) if currentFrame else 1.5
+        frameWidth = st.slider(
+            'Set frame canvas width',
+            min_value=100,
+            max_value=3000,
+            value=500,
+            step=10,
+            key='frameWidth'
+        )
+        frameHeight = frameWidth * (currentFrame.height / currentFrame.width) if currentFrame else 0.5
         scaleWidth = frameWidth / currentFrame.width
         scaleHeight = frameHeight / currentFrame.height
         teamsColors = {
@@ -645,13 +657,16 @@ with firstRow[1]:
     elif annotationType == EVENT_ANNOTATION:
         selectedEvent = st.selectbox(
             'Choose event',
-            ['-'] + list(events['Actions']))
+            ['-'] + list(events['Actions'])
+        )
         selectedTeam = st.selectbox(
             'Choose team',
-            ['-'] + list(players.columns[[1, 2]]))
+            ['-'] + list(players.columns[[1, 2]])
+        )
         selectedPlayer = st.selectbox(
             'Choose player',
-            ['-'] + list(players[selectedTeam]) if selectedTeam != '-' else ['-'])
+            ['-'] + list(players[selectedTeam]) if selectedTeam != '-' else ['-']
+        )
         submitAnnotation = st.button('Add annotation')
         if EVENT_ANNOTATION not in st.session_state:
             st.session_state[EVENT_ANNOTATION] = pd.read_csv('ui/data/default/event_annotations.csv')
@@ -671,6 +686,19 @@ with firstRow[1]:
         annotations = eventAnnotations.append(st.session_state[EVENT_ANNOTATION])
 
 with firstRow[2]:
+    if annotationType == LINE_ANNOTATION and annotationEditingMode == ADD_ANNOTATIONS:
+        linesCoordinates = json.load(
+            open('automatic_models/lines_and_field_detection/data/lines_coordinates.json')
+        )
+        pitchImage = Image.open('automatic_models/lines_and_field_detection/data/template.png')
+        pitchImageDraw = ImageDraw.Draw(pitchImage)
+        lineCoordinates = [
+            (linesCoordinates[selectedLine][0][0], linesCoordinates[selectedLine][0][1]),
+            (linesCoordinates[selectedLine][1][0], linesCoordinates[selectedLine][1][1])
+        ]
+        pitchImageDraw.line(lineCoordinates, fill='red', width=10)
+        st.image(pitchImage)
+
     gridOptionsBuilder = GridOptionsBuilder.from_dataframe(annotations)
     gridOptionsBuilder.configure_default_column(editable=True)
     ag_events = AgGrid(
@@ -680,7 +708,7 @@ with firstRow[2]:
     )
 
     saveAnnotations = st.button('Save annotations')
-    if saveAnnotations:
+    if saveAnnotations and videoSourceType == 'File':
         datetimeStr = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         dirName = matchDirectory + '/annotations/annotations_' + datetimeStr
         os.mkdir(dirName)
