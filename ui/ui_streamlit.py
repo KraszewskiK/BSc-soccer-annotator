@@ -12,6 +12,8 @@ import cv2
 from base64 import b64encode
 import json
 from tempfile import NamedTemporaryFile
+from screeninfo import get_monitors
+import match_folder_structure_validator
 
 # from execute_scrapper import run_script
 
@@ -69,39 +71,73 @@ with sidebar:
         key='videoSourceType'
     )
     if videoSourceType == 'URL':
-        default_video = "https://www.youtube.com/watch?v=muIp6hciYl8"
-        videoURL = st.text_input(
-            'Enter your video URL',
-            value=default_video,
-            placeholder='Enter YouTube URL',
-            on_change=video_on_change
-        )
+        with st.form(key='get_video_from_url'):
+            default_video = "https://www.youtube.com/watch?v=muIp6hciYl8"
+            videoURL = st.text_input(
+                'Enter your video URL',
+                value=default_video,
+                placeholder='Enter YouTube URL'
+            )
+            st.write('Supply data about the match')
+            matchDate = st.date_input(
+                'Choose the date of the match'
+            )
+            sidebarColumns = st.columns(2)
+            with sidebarColumns[0]:
+                firstTeam = st.text_input('The first team', value='Team1')
+            with sidebarColumns[1]:
+                secondTeam = st.text_input('The second team', value='Team2')
+            loadVideo = st.form_submit_button('Load video')
+            if loadVideo:
+                # TODO
+                # add data verification
+                video_on_change()
+                matchDirectory = match_folder_structure_validator.input_match(
+                    firstTeam,
+                    secondTeam,
+                    matchDate
+                )
+                st.session_state['matchDirectory'] = matchDirectory
+        if 'matchDirectory' not in st.session_state:
+            st.warning('Load a video to start annotating.')
+            st.stop()
+        else:
+            matchDirectory = st.session_state['matchDirectory']
     elif videoSourceType == 'File':
         matchDirectories = os.listdir('matches/')
-        matchDirectory = 'matches/' + st.selectbox(
-            'Select a match',
-            matchDirectories
+        matchDirectory = os.path.join(
+            'matches',
+            st.selectbox(
+                'Select a match',
+                matchDirectories
+            )
         )
-        videoFile = open(matchDirectory + '/video.mp4', 'rb')
-        if videoFile is not None:
+        if os.path.exists(os.path.join(matchDirectory, 'video.mp4')):
+            videoFile = open(os.path.join(matchDirectory, 'video.mp4'), 'rb')
             videoBytes = videoFile.read()
             videoData = b64encode(videoBytes).decode()
             mimeType = "video/mp4"
             videoURL = [{"type": mimeType, "src": f"data:{mimeType};base64,{videoData}"}]
         else:
+            st.error('No video file found!')
             st.stop()
+
+    if not (os.path.exists(os.path.join(matchDirectory, 'annotations')) and os.path.isdir(
+            os.path.join(matchDirectory, 'annotations'))):
+        os.mkdir(os.path.join(matchDirectory, 'annotations'))
 
     with st.form(key='scraper_form'):
         st.write('Getting data about the match')
-        matchDate = st.date_input(
-            'Choose the date of the match',
-            value=datetime.date(2019, 8, 17)
-        )
-        sidebarColumns = st.columns(2)
-        with sidebarColumns[0]:
-            firstTeam = st.text_input('The first team', value='Team1')
-        with sidebarColumns[1]:
-            secondTeam = st.text_input('The second team', value='Team2')
+        if videoSourceType == 'File':
+            matchDate = st.date_input(
+                'Choose the date of the match',
+                value=datetime.date(2019, 8, 17)
+            )
+            sidebarColumns = st.columns(2)
+            with sidebarColumns[0]:
+                firstTeam = st.text_input('The first team', value='Team1')
+            with sidebarColumns[1]:
+                secondTeam = st.text_input('The second team', value='Team2')
         scrapData = st.form_submit_button('Get data')
         if scrapData:
             # initialize data scraping
@@ -110,84 +146,124 @@ with sidebar:
             # except:
             #     st.error('No data could be found')
 
-            st.session_state['scrapedData'] = json.load(
-                open(matchDirectory + '/scrapped_data.json')
+            if os.path.exists(os.path.join(matchDirectory, 'scrapped_data.json')):
+                st.session_state['scrapedData'] = json.load(
+                    open(os.path.join(matchDirectory, 'scrapped_data.json'))
+                )
+            else:
+                st.error('No scraped data found!')
+
+    with st.form(key='loading_annotations'):
+        st.write('Loading saved annotations')
+        annotationDirectories = os.listdir(os.path.join(matchDirectory, 'annotations'))
+        if len(annotationDirectories) == 0:
+            st.warning('No saved annotations to load.')
+        else:
+            annotationDirectory = os.path.join(
+                matchDirectory,
+                'annotations',
+                st.selectbox(
+                    'Select directory with annotations',
+                    annotationDirectories
+                )
             )
+        loadAnnotations = st.form_submit_button('Load annotations')
+        if loadAnnotations:
+            if len(annotationDirectories) == 0:
+                st.error('No saved annotations to load!')
+            else:
+                if os.path.exists(os.path.join(annotationDirectory, 'objects.json')):
+                    st.session_state[PLAYER_ANNOTATION] = json.load(
+                        open(os.path.join(annotationDirectory, 'objects.json'))
+                    )
+                    st.session_state['player_info'] = {}
+                    for key, value in st.session_state[PLAYER_ANNOTATION].items():
+                        st.session_state['player_info'][key] = {}
+                        for key2, value2 in value.items():
+                            if value2['class'] == 'PERSON':
+                                st.session_state['player_info'][key][
+                                    (value2['x_top_left'] // 10,
+                                     value2['y_top_left'] // 10,
+                                     value2['x_bottom_right'] // 10,
+                                     value2['y_bottom_right'] // 10)
+                                ] = (
+                                    value2['confidence'],
+                                    value2['Team'] if 'Team' in value2 else '-',
+                                    value2['Player'] if 'Player' in value2 else '-'
+                                )
+
+                    st.session_state[BALL_ANNOTATION] = json.load(
+                        open(os.path.join(annotationDirectory, 'objects.json'))
+                    )
+
+                    st.info('objects.json file loaded')
+                else:
+                    st.warning('no objects.json file found')
+
+                if os.path.exists(os.path.join(annotationDirectory, 'lines.json')):
+                    st.session_state[LINE_ANNOTATION] = {}
+                    st.session_state['lines_names'] = {}
+                    for key, value in json.load(
+                            open(os.path.join(annotationDirectory, 'lines.json'))
+                    ).items():
+                        i = 0
+                        d = {}
+                        st.session_state['lines_names'][key] = {}
+                        for key2, value2 in value.items():
+                            d[str(i)] = {
+                                'line': key2,
+                                'x1': value2[0][0],
+                                'y1': value2[0][1],
+                                'x2': value2[1][0],
+                                'y2': value2[1][1]
+                            }
+                            i += 1
+                            st.session_state['lines_names'][key][
+                                (value2[0][0] // 10,
+                                 value2[0][1] // 10,
+                                 value2[1][0] // 10,
+                                 value2[1][1] // 10)
+                            ] = key2
+                        st.session_state[LINE_ANNOTATION][key] = d
+
+                    st.info('lines.json file loaded')
+                else:
+                    st.warning('no lines.json file found')
+
+                if os.path.exists(os.path.join(annotationDirectory, 'fields.json')):
+                    st.session_state[FIELD_ANNOTATION] = {}
+                    for key, value in json.load(
+                            open(os.path.join(annotationDirectory, 'fields.json'))
+                    ).items():
+                        i = 1
+                        d = {}
+                        for xy in value:
+                            d['x' + str(i)] = xy[0]
+                            d['y' + str(i)] = xy[1]
+                            i += 1
+                        st.session_state[FIELD_ANNOTATION][key] = {'0': d}
+
+                    st.info('fields.json file loaded')
+                else:
+                    st.warning('no fields.json file found')
+
+                # if os.path.exists(os.path.join(annotationDirectory, 'actions.json')):
+                #     st.session_state[EVENT_ANNOTATION] = json.load(
+                #         open(os.path.join(annotationDirectory, 'actions.json'))
+                #     )
+                #
+                #     st.info('actions.json file loaded')
+                # else:
+                #     st.warning('no actions.json file found')
 
     with st.form(key='automatic_annotation'):
         st.write('Getting automatic annotations')
-        if videoSourceType == 'File':
-            annotationDirectories = os.listdir(matchDirectory + '/annotations/')
-            annotationDirectory = matchDirectory + '/annotations/' + st.selectbox(
-                'Select directory with annotations',
-                annotationDirectories
-            )
+        annotationDirectories = os.listdir(os.path.join(matchDirectory, 'annotations'))
         annotate = st.form_submit_button('Get annotations')
-        if annotate and videoSourceType == 'File':
-            # read annotations from files
-            st.session_state[PLAYER_ANNOTATION] = json.load(
-                open(os.path.join(annotationDirectory, 'objects.json'))
-            )
-            st.session_state['player_info'] = {}
-            for key, value in st.session_state[PLAYER_ANNOTATION].items():
-                st.session_state['player_info'][key] = {}
-                for key2, value2 in value.items():
-                    if value2['class'] == 'PERSON':
-                        st.session_state['player_info'][key][
-                            (value2['x_top_left'] // 10,
-                             value2['y_top_left'] // 10,
-                             value2['x_bottom_right'] // 10,
-                             value2['y_bottom_right'] // 10)
-                        ] = (
-                            value2['confidence'],
-                            value2['Team'] if 'Team' in value2 else '-',
-                            value2['Player'] if 'Player' in value2 else '-'
-                        )
-
-            st.session_state[BALL_ANNOTATION] = json.load(
-                open(os.path.join(annotationDirectory, 'objects.json'))
-            )
-
-            st.session_state[LINE_ANNOTATION] = json.load(
-                open(os.path.join(annotationDirectory, 'lines.json'))
-            )
-            st.session_state['lines_names'] = {}
-            for key, value in json.load(
-                    open(os.path.join(annotationDirectory, 'lines.json'))
-            ).items():
-                i = 0
-                d = {}
-                st.session_state['lines_names'][key] = {}
-                for key2, value2 in value.items():
-                    d[str(i)] = {
-                        'line': key2,
-                        'x1': value2[0][0],
-                        'y1': value2[0][1],
-                        'x2': value2[1][0],
-                        'y2': value2[1][1]
-                    }
-                    i += 1
-                    st.session_state['lines_names'][key][
-                        (value2[0][0] // 10,
-                         value2[0][1] // 10,
-                         value2[1][0] // 10,
-                         value2[1][1] // 10)
-                    ] = key2
-                st.session_state[LINE_ANNOTATION][key] = d
-
-            st.session_state[FIELD_ANNOTATION] = json.load(
-                open(os.path.join(annotationDirectory, 'fields.json'))
-            )
-            for key, value in json.load(
-                    open(os.path.join(annotationDirectory, 'fields.json'))
-            ).items():
-                i = 1
-                d = {}
-                for xy in value:
-                    d['x' + str(i)] = xy[0]
-                    d['y' + str(i)] = xy[1]
-                    i += 1
-                st.session_state[FIELD_ANNOTATION][key] = {'0': d}
+        if annotate:
+            # TODO
+            # initializing automatic annotation
+            pass
 
 if 'scrapedData' in st.session_state:
     scrapedData = st.session_state['scrapedData']
@@ -220,7 +296,7 @@ if 'scrapedData' in st.session_state:
         newEvent = {
             "videoTime": str(substitution[1]),
             "gamePart": '1' if int(substitution[1]) < 45 else '2',
-            "label": "Substitution",
+            "label": "Substitution - " + substitution[2],
             "team": firstTeam,
             'player': substitution[0]
         }
@@ -232,7 +308,7 @@ if 'scrapedData' in st.session_state:
         newEvent = {
             "videoTime": str(substitution[1]),
             "gamePart": '1' if int(substitution[1]) < 45 else '2',
-            "label": "Substitution",
+            "label": "Substitution - " + substitution[2],
             "team": secondTeam,
             'player': substitution[0]
         }
@@ -351,6 +427,8 @@ with firstRow[2]:
          ADD_ANNOTATIONS],
         horizontal=True
     )
+    if annotationEditingMode == MODIFY_ANNOTATIONS and annotationType != EVENT_ANNOTATION:
+        st.info('Double-click an object in the frame to remove it.')
 
 # with st.expander('Editing', expanded=False):
 #     secondRow = st.columns([1, 2, 1, 1, 6])
@@ -411,7 +489,7 @@ with firstRow[1]:
         elif videoSourceType == 'File':
             # temporaryFile = NamedTemporaryFile(delete=False)
             # temporaryFile.write(videoFile.read())
-            capture = cv2.VideoCapture(matchDirectory + '/video.mp4')
+            capture = cv2.VideoCapture(os.path.join(matchDirectory, 'video.mp4'))
         st.session_state['capturedVideo'] = capture
 
     capturedVideo = st.session_state['capturedVideo']
@@ -436,11 +514,13 @@ with firstRow[1]:
         }
 
         currentFrame = get_frame(secondsOfVideoPlayed)
+        monitors = get_monitors()
+        monitorWidth = monitors[0].width
         frameWidth = st.slider(
             'Set frame canvas width',
             min_value=100,
             max_value=3000,
-            value=500,
+            value=int(monitorWidth * 0.4),
             step=10,
             key='frameWidth'
         )
@@ -647,6 +727,7 @@ with firstRow[1]:
                 annotations = lineAnnotations
             elif annotationType == FIELD_ANNOTATION:
                 annotations = fieldAnnotations
+
             if annotationType in st.session_state:
                 st.session_state[annotationType][secondsRoundedStr] = annotationsDict
             else:
@@ -690,7 +771,7 @@ with firstRow[2]:
         linesCoordinates = json.load(
             open('automatic_models/lines_and_field_detection/data/lines_coordinates.json')
         )
-        pitchImage = Image.open('automatic_models/lines_and_field_detection/data/template.png')
+        pitchImage = Image.open('automatic_models/lines_and_field_detection/data/templateLineNames.png')
         pitchImageDraw = ImageDraw.Draw(pitchImage)
         lineCoordinates = [
             (linesCoordinates[selectedLine][0][0], linesCoordinates[selectedLine][0][1]),
@@ -708,15 +789,15 @@ with firstRow[2]:
     )
 
     saveAnnotations = st.button('Save annotations')
-    if saveAnnotations and videoSourceType == 'File':
+    if saveAnnotations:
         datetimeStr = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        dirName = matchDirectory + '/annotations/annotations_' + datetimeStr
+        dirName = os.path.join(matchDirectory, 'annotations/annotations_' + datetimeStr)
         os.mkdir(dirName)
         filenameEnding = '.json'
 
 
         def save_annotations(annotations_data, filename):
-            with open(dirName + '/' + filename + filenameEnding, 'w') as file:
+            with open(os.path.join(dirName, filename + filenameEnding), 'w') as file:
                 json.dump(
                     annotations_data,
                     file,
