@@ -7,4 +7,3 @@ streamlit-aggrid==0.3.3
 streamlit_drawable_canvas==0.9.2
 streamlit_player==0.1.5
 youtube_dl==2021.12.17
-screeninfo~=0.8.1
