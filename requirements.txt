@@ -16,7 +16,6 @@ scikit_image
 scipy
 selenium==4.7.2
 Shapely==2.0.0
-skimage
 streamlit==1.15.1
 streamlit-aggrid==0.3.3
 streamlit_authenticator==0.2.1
