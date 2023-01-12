@@ -13,7 +13,7 @@ python-dotenv==0.21.0
 requests==2.24.0
 requests_html==0.10.0
 scikit_image
-scipy==1.5.2
+scipy
 selenium==4.7.2
 Shapely==2.0.0
 skimage==0.0
