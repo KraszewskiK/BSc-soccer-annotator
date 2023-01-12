@@ -10,7 +10,7 @@ opencv-python-headless
 pandas==1.5.2
 Pillow==9.4.0
 python-dotenv==0.21.0
-requests==2.24.0
+requests
 requests_html==0.10.0
 scikit_image
 scipy
