@@ -18,7 +18,7 @@ from zipfile import ZipFile
 # DISABLED
 # from pathlib import Path
 # from execute_scrapper import run_script
-from read_team_options import read_teams_options
+# from read_team_options import read_teams_options
 
 # DISABLED
 # import streamlit_authenticator as stauth
@@ -59,14 +59,15 @@ eventAnnotations = pd.read_csv('ui/data/default/event_annotations.csv')
 videoFileName = 'video.mp4'
 
 # loading teams data
-teams_options = read_teams_options("ui/teams_data/Teams_names_array.txt")
-Countries_options = read_teams_options("ui/teams_data/Countries_names_array.txt")
-Countries_options_fr = read_teams_options("ui/teams_data/Countries_names_fr_array.txt")
-countries_dict = dict(zip(Countries_options, Countries_options_fr))
-teams_dict = dict(zip(teams_options, teams_options))
-dict_concatenated = {}
-dict_concatenated.update(countries_dict)
-dict_concatenated.update(teams_dict)
+# DISABLED
+# teams_options = read_teams_options("ui/teams_data/Teams_names_array.txt")
+# Countries_options = read_teams_options("ui/teams_data/Countries_names_array.txt")
+# Countries_options_fr = read_teams_options("ui/teams_data/Countries_names_fr_array.txt")
+# countries_dict = dict(zip(Countries_options, Countries_options_fr))
+# teams_dict = dict(zip(teams_options, teams_options))
+# dict_concatenated = {}
+# dict_concatenated.update(countries_dict)
+# dict_concatenated.update(teams_dict)
 
 # DISABLED
 # --- User Authentication ---
