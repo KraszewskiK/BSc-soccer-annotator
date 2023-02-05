@@ -3,7 +3,7 @@ beautifulsoup4==4.11.1
 calc==1.0
 deta==1.1.0
 python-dotenv==0.21.1
-requests==2.28.1
+requests
 requests_html==0.10.0
 selenium==4.8.0
 setuptools==44.0.0
@@ -25,15 +25,14 @@ SoccerNet==0.1.35
 moviepy==1.0.3
 kornia==0.6.9
 numpy==1.23.4
-opencv_python==4.5.5.62
+opencv-python-headless
 pandas==1.5.3
 Pillow==9.4.0
 PyYAML==6.0
-requests==2.28.1
-scikit_image==0.19.3
+scikit_image
 scikit_learn==1.2.1
 scikit_video==1.1.11
-scipy==1.10.0
+scipy
 Shapely==2.0.1
 tensorflow==2.11.0
 torch==1.13.0
